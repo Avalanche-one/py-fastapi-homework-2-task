@@ -1,7 +1,13 @@
 import datetime
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator
+)
 
 
 class CountryResponseSchema(BaseModel):
@@ -53,9 +59,7 @@ class MovieCreateSchema(MovieBaseSchema):
     budget: float = Field(ge=0)
     revenue: float = Field(ge=0)
     country: str = Field(
-        min_length=3,
-        max_length=3,
-        pattern=r"^[A-Z]{3}$"
+        pattern=r"^[A-Z]{2,3}$"
     )
     genres: list[str]
     actors: list[str]
@@ -82,6 +86,24 @@ class MovieCreateSchema(MovieBaseSchema):
         return value
 
 
+class MovieUpdateSchema(BaseModel):
+    name: str | None = Field(default=None, max_length=255)
+    date: datetime.date | None = None
+    score: float | None = Field(default=None, ge=0, le=100)
+    overview: str | None = None
+    status: MovieStatus | None = None
+    budget: float | None = Field(default=None, ge=0)
+    revenue: float | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def reject_explicit_nulls(self):
+        for field_name in self.model_fields_set:
+            if getattr(self, field_name) is None:
+                raise ValueError(f"{field_name} cannot be null")
+
+        return self
+
+
 class MovieCreateResponseSchema(MovieListItemSchema):
     status: str
     budget: float
@@ -91,12 +113,6 @@ class MovieCreateResponseSchema(MovieListItemSchema):
     actors: list[RelatedEntitySchema]
     languages: list[RelatedEntitySchema]
 
-    model_config = ConfigDict(from_attributes=True)
 
-
-# class MovieDetailSchema
-#     pass
-
-
-# class MovieListItemSchema
-#     pass
+class MovieDetailSchema(MovieCreateResponseSchema):
+    pass

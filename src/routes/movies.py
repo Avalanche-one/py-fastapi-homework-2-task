@@ -20,7 +20,9 @@ from database.models import (
 from schemas import (
     MovieListResponseSchema,
     MovieCreateSchema,
-    MovieCreateResponseSchema
+    MovieCreateResponseSchema,
+    MovieDetailSchema,
+    MovieUpdateSchema
 )
 
 router = APIRouter()
@@ -210,3 +212,77 @@ async def create_movie(
             status_code=500,
             detail="Database operation failed.",
         ) from exc
+
+
+@router.get("/movies/{movie_id}/", response_model=MovieDetailSchema, status_code=200)
+async def get_movie(
+        movie_id: int,
+        db: AsyncSession = Depends(get_db)
+):
+    statement = (
+        select(MovieModel)
+        .options(
+            selectinload(MovieModel.country),
+            selectinload(MovieModel.genres),
+            selectinload(MovieModel.actors),
+            selectinload(MovieModel.languages),
+        )
+        .where(MovieModel.id == movie_id)
+    )
+
+    movie = await db.scalar(statement)
+
+    if movie is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Movie with the given ID was not found.",
+        )
+
+    return movie
+
+
+@router.delete("/movies/{movie_id}/", status_code=204)
+async def delete_movie(
+        movie_id: int,
+        db: AsyncSession = Depends(get_db)
+):
+    movie = await db.get(MovieModel, movie_id)
+
+    if movie is None:
+        raise HTTPException(status_code=404, detail="Movie with the given ID was not found.")
+    try:
+        await db.delete(movie)
+        await db.commit()
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed",
+        )
+
+
+@router.patch("/movies/{movie_id}/", status_code=200)
+async def update_movie(
+    movie_id: int,
+    fields_to_update: MovieUpdateSchema,
+    db: AsyncSession = Depends(get_db),
+):
+    movie = await db.get(MovieModel, movie_id)
+
+    if movie is None:
+        raise HTTPException(status_code=404, detail="Movie with the given ID was not found.")
+
+    update_data = fields_to_update.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(movie, field, value)
+
+    try:
+        await db.commit()
+        return {"detail": "Movie updated successfully."}
+    except SQLAlchemyError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Database operation failed",
+        )
