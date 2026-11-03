@@ -61,6 +61,12 @@ async def get_movies(
 
     total_pages = (total_items + per_page - 1) // per_page
 
+    if page > total_pages and total_items > 0:
+        raise HTTPException(
+            status_code=404,
+            detail="No movies found."
+        )
+
     path = "/theater/movies/"
     prev_page = (
         f"{path}?page={page - 1}&per_page={per_page}"
